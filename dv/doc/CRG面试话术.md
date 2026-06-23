@@ -10,14 +10,14 @@
 ## Q1. 你做过的 CRG 验证具体是什么？讲讲架构。
 
 **标准答案**：
-CRG（Clock and Reset Generator）是 SoC 里给所有子模块供时钟和复位的"心脏"。我做的 G100 CRG 分成 3 个独立 IP：**clkmgr**（时钟管理，含 PLL/分频/mux/门控）、**rstmgr**（复位管理，含同步器/滤波器/复位树）、**pwrmgr**（电源管理，含低功耗 FSM/唤醒/isolation）。三个 IP 共享一条 APB 总线，但地址段分开。
+CRG（Clock and Reset Generator）是 SoC 里给所有子模块供时钟和复位的"心脏"。我做的 G100 CRG 分成 3 个独立 IP：**clkmgr**（时钟管理，3 个 PLL + 5:1 mux + 分频链 + ICG + 10 个叶子时钟）、**rstmgr**（复位管理，6 复位源 + 毛刺滤波 + 8 域独立同步器 + 复位原因锁存）、**pwrmgr**（电源管理，低功耗 FSM + 唤醒仲裁 + isolation）。三个 IP 共享一条 APB 总线，地址段分开。
 
 **项目佐证**：
-验证上我自己设计的方案，**分 UT 和 ST 两层**。每个 IP 有独立 UVM env 做单元测试（UT），主要验单模块功能；顶层 g100_crg_top 做 ST，验跨 IP 握手——比如 pwrmgr 触发低功耗时，clkmgr 要关时钟、rstmgr 要拉复位，这种交互只有 ST 能验。
+时钟树和复位树结构对称——10 个叶子时钟对应 8 个复位域（gmac_rx 是外部异步时钟不单独复位，cpu_aclk 共享 cpu_core 域）。验证上我自己设计的方案，**分 UT 和 ST 两层**：每个 IP 有独立 UVM env 做单元测试，顶层 g100_crg_top 做 ST 验跨 IP 握手。
 
-每个 UT 都跑 **CSR 三件套**（hw_reset / bit_bash / aliasing），加上定向序列覆盖每个功能点。参考模型和 DUT 完全解耦，只读寄存器配置算期望值，scoreboard 比对真实采样。
+每个 UT 都跑 **CSR 三件套**（hw_reset / bit_bash / aliasing），加上定向序列覆盖每个功能点。clkmgr 的 scoreboard 对 10 个叶子时钟分别预测期望频率（PLL → mux → div → 叶子整条链路推算），monitor 实测比对。
 
-**加分点**：主动说"我自己抽象了一套 base env（crg_base_env），三个 IP 的 UT 都继承它，复用 CSR 三件套和 phase 管理，新增 IP 验证时 env 改动量很小"。
+**加分点**：主动说"我还加了硬件频率测量单元——用 32K 的 aon_clk 数快时钟周期，超 ±5% 报 fatal，这是真实芯片的安全保护机制，不依赖 CPU 软件就能在启动早期发现 PLL 失锁"。
 
 ---
 
@@ -81,6 +81,25 @@ sync_rst_n = ff2;
 **项目佐证**：G100 rstmgr 的 `rstmgr_sync.sv` 就是这个结构。验证用 `rstmgr_sync_vseq` 反复触发复位，SVA 检查 `sync_rst_n` 的 $rose 只能发生在 cpu_clk posedge 后的下一拍。
 
 **加分点**：提"如果是单 FF 同步器，复位释放那一拍还是有 metastability 风险；2 FF 是工业标准，3 FF 用于特别高频或对可靠性要求极高的场景"。
+
+---
+
+## Q4b. 复位树怎么设计？多个时钟域怎么处理？
+
+**标准答案**：
+复位树和时钟树结构对称——每个时钟域对应一个独立的复位同步器。G100 有 10 个叶子时钟，对应 8 个复位域（gmac_rx 是外部异步不单独复位，cpu_aclk 共享 cpu_core 域）。
+
+设计：
+1. **多源 AND**：POR/WDG/DBG/SW/低压检测/安全违规 6 个异步源 AND 成 tree_rst_n
+2. **毛刺滤波**：tree_rst_n 过 glitch_filter（threshold 可配，过滤 < N 周期的毛刺）
+3. **每域独立同步**：8 个 rstmgr_sync 实例，每个用自己的域时钟做"异步复位同步释放"
+4. **复位原因锁存**：7-bit 寄存器记录是哪个源触发的，SoC 启动后软件可查询
+
+**为什么要每域独立同步？** 如果所有域共用一个同步器，那个同步器的输出要扇出到所有域——但每个域时钟不同，扇出过程中可能再次产生 metastability。每域一个独立同步器，让同步发生在目标域本地，最稳。
+
+**项目佐证**：G100 rstmgr 有 8 个 rstmgr_sync 实例（cpu_core/cpu_aclk/axi_main/ddr_ref/ahb/periph/gmac/qspi），每个接对应域时钟。`rstmgr_sync_vseq` 验证：tree_rst_n 释放后，每个域的 sync_rst_n 只在该域 clk posedge 后 1~2 拍才释放。
+
+**加分点**：提"复位原因锁存很有用——芯片回片后如果用户报'机器死机重启'，软件读 rst_reason 就知道是 WDG 超时、低压检测还是安全违规触发的，不用现场 debug"。
 
 ---
 
@@ -214,7 +233,7 @@ UT（单元测试）和 ST（系统测试）分层是我做的 CRG 验证的核�
 
 **项目佐证**：G100 三个 IP 各有 UT，每个 UT 跑 smoke/common/feature/stress 共 6~8 个 vseq。ST 跑 smoke/lowpower/reset_storm/stress 4 个 vseq。
 
-**加分点**：提"我把 clkmgr/rstmgr/pwrmgr 三个 IP 各自做 UT 放在 ut/ 目录下，SoC 顶层 ST 放在 st/ 目录下，目录组织本身就体现了分层思想，新加 IP 直接套用 UT 模板"。
+**加分点**：提"我把 clkmgr/rstmgr/pwrmgr 三个 IP 各自做 UT 放在 ut/ 目录下，SoC 顶层 ST 放在 st/ 目录下，目录组织本身就体现了分层思想。比如 clkmgr UT 验 3 个 PLL 独立 lock、5:1 mux 切换、10 个叶子频率；ST 验 pwrmgr 触发低功耗后 clkmgr 关时钟、rstmgr 的 8 个域同步器在没时钟时怎么处理——这种跨模块时序只有 ST 能暴露"。
 
 ---
 
