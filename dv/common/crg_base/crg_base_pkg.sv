@@ -87,21 +87,19 @@ package crg_base_pkg;
         endtask
         // run a CSR suite by name ("hw_reset", "bit_bash", "aliasing")
         virtual task run_csr_suite(string which);
-            uvm_sequence seq;
             case (which)
                 "hw_reset": begin
                     csr_hw_reset_seq hw = csr_hw_reset_seq::type_id::create("hw");
-                    hw.rm = rm; hw.set_sequencer(p_sequencer.apb_sqr);
+                    hw.rm = rm;
                     hw.start(p_sequencer.apb_sqr);
                 end
                 "bit_bash": begin
                     csr_bit_bash_seq bb = csr_bit_bash_seq::type_id::create("bb");
-                    bb.rm = rm; bb.set_sequencer(p_sequencer.apb_sqr);
+                    bb.rm = rm;
                     bb.start(p_sequencer.apb_sqr);
                 end
                 "aliasing": begin
                     csr_aliasing_seq al = csr_aliasing_seq::type_id::create("al");
-                    al.set_sequencer(p_sequencer.apb_sqr);
                     al.rm = rm;
                     al.start(p_sequencer.apb_sqr);
                 end

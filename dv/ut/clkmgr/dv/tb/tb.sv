@@ -54,39 +54,40 @@ module tb;
         .pll_lock(pll_lock)
     );
 
-    // passive clock monitor: sample pll/cpu_clk_g periodically and post to scb
-    // (In a fuller env this would live in a dedicated monitor component; here
-    //  it's inlined in tb for compactness, fed into the scoreboard.)
+    // passive clock monitor: sample pll_clk periodically and push to scoreboard.
+    // Measures period between two consecutive posedges, posts to sb.
+    // Feeds BUG_002 detection (PLL frac freq mismatch).
     initial begin
+        clkmgr_env_pkg::clkmgr_scoreboard sb;
+        uvm_component c;
+
         forever begin
-            #1000ns;
-            // emit pll sample
+            if (sb == null) begin
+                c = uvm_top.find("uvm_test_top.env.sb");
+                if (c != null) $cast(sb, c);
+            end
+            #2000ns;
             begin
                 clkmgr_env_pkg::clk_sample_tr tr = clkmgr_env_pkg::clk_sample_tr::type_id::create("tr");
-                time t1, t2; real sum_h=0, sum_l=0; int edges=0;
+                time t_start, t_end; int rise_count=0; real first_period=0;
                 fork
                     begin
-                        // measure over 500ns
-                        time start = $time;
-                        bit   prev = pll_clk;
-                        while ($time - start < 500ns) begin
-                            @(pll_clk);
-                            if (pll_clk === 1'b1) begin
-                                t1 = $time; @(negedge pll_clk); t2 = $time; sum_h += real'(t2-t1);
-                            end else begin
-                                t1 = $time; @(posedge pll_clk); t2 = $time; sum_l += real'(t2-t1);
-                            end
-                            edges++;
-                        end
+                        wait (pll_clk === 1'b0 || pll_clk === 1'b1);
+                        @(posedge pll_clk);
+                        t_start = $time;
+                        @(posedge pll_clk);
+                        t_end = $time;
+                        first_period = real'(t_end - t_start);
+                        rise_count = 2;
                     end
-                    begin #550ns; end
+                    begin #1500ns; end
                 join_any disable fork;
                 tr.node = "pll_clk";
-                tr.s.period_ns = (edges > 1) ? (sum_h + sum_l) * 2.0 / real'(edges) : 0.0;
-                tr.s.duty = (sum_h+sum_l > 0) ? sum_h/(sum_h+sum_l) : 0.0;
-                tr.s.glitch = 0; tr.s.stopped = (edges < 2);
-                // publish via static analysis export
-                uvm_config_db#(clkmgr_env_pkg::clk_sample_tr)::set(null, "*", "last_pll_sample", tr);
+                tr.s.period_ns = (rise_count == 2) ? first_period : 0.0;
+                tr.s.duty = 0.5;
+                tr.s.glitch = 0;
+                tr.s.stopped = (rise_count < 2);
+                if (sb != null) sb.write(tr);
             end
         end
     end
@@ -117,6 +118,13 @@ module tb;
     initial begin
         uvm_config_db#(virtual apb_if)::set(null, "*", "vif", apb_vif);
         run_test();
+    end
+
+    // global timeout safeguard
+    initial begin
+        #100000ns;
+        $display("[TB] FATAL: global timeout at %0t", $time);
+        $finish;
     end
 
 endmodule

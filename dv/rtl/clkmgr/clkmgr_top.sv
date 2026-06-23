@@ -134,22 +134,39 @@ module clkmgr_top (
     end
 
     // ---- Field decode ----
-    logic        pll_bypass  = clk_ctrl_q[0];
-    logic        src_sel     = clk_ctrl_q[1];
-    logic [5:0]  pll_refdiv  = pll_cfg_q[5:0];
-    logic [7:0]  pll_fbdiv   = pll_cfg_q[13:6];
-    logic        pll_dsmen   = pll_cfg_q[14];
-    logic [23:0] pll_frac    = pll_cfg_q[38:15];
-    logic [2:0]  pll_pd1     = pll_cfg_q[41:39];
-    logic [2:0]  pll_pd2     = pll_cfg_q[44:42];
-    logic [6:0]  div_ratio   = div_cfg_q[6:0];
-    logic        div_half    = div_cfg_q[7];
-    logic        gate_cpu_en = gate_cfg_q[0];
-    logic        gate_gpu_en = gate_cfg_q[1];
-    logic        gate_ddr_en = gate_cfg_q[2];
-    logic [1:0]  mux_cpu_sel = mux_cfg_q[1:0];
-    logic [1:0]  mux_gpu_sel = mux_cfg_q[3:2];
-    logic [1:0]  mux_ddr_sel = mux_cfg_q[5:4];
+    logic        pll_bypass;
+    logic        src_sel;
+    logic [5:0]  pll_refdiv;
+    logic [7:0]  pll_fbdiv;
+    logic        pll_dsmen;
+    logic [23:0] pll_frac;
+    logic [2:0]  pll_pd1;
+    logic [2:0]  pll_pd2;
+    logic [6:0]  div_ratio;
+    logic        div_half;
+    logic        gate_cpu_en;
+    logic        gate_gpu_en;
+    logic        gate_ddr_en;
+    logic [1:0]  mux_cpu_sel;
+    logic [1:0]  mux_gpu_sel;
+    logic [1:0]  mux_ddr_sel;
+
+    assign pll_bypass  = clk_ctrl_q[0];
+    assign src_sel     = clk_ctrl_q[1];
+    assign pll_refdiv  = pll_cfg_q[5:0];
+    assign pll_fbdiv   = pll_cfg_q[13:6];
+    assign pll_dsmen   = pll_cfg_q[14];
+    assign pll_frac    = pll_cfg_q[38:15];
+    assign pll_pd1     = pll_cfg_q[41:39];
+    assign pll_pd2     = pll_cfg_q[44:42];
+    assign div_ratio   = div_cfg_q[6:0];
+    assign div_half    = div_cfg_q[7];
+    assign gate_cpu_en = gate_cfg_q[0];
+    assign gate_gpu_en = gate_cfg_q[1];
+    assign gate_ddr_en = gate_cfg_q[2];
+    assign mux_cpu_sel = mux_cfg_q[1:0];
+    assign mux_gpu_sel = mux_cfg_q[3:2];
+    assign mux_ddr_sel = mux_cfg_q[5:4];
 
     // ---- Source mux (OSC vs XTAL) ----
     logic pll_ref_clk;

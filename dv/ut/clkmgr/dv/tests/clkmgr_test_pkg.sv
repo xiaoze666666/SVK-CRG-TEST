@@ -118,5 +118,18 @@ package clkmgr_test_pkg;
         endtask
     endclass
 
+    class clkmgr_coverage_test extends clkmgr_base_test;
+        `uvm_component_utils(clkmgr_coverage_test)
+        function new(string name, uvm_component parent); super.new(name, parent); endfunction
+        task run_phase(uvm_phase phase);
+            clkmgr_coverage_vseq v;
+            super.run_phase(phase);
+            v = clkmgr_coverage_vseq::type_id::create("v");
+            v.set_sequencer(env.vseqr);
+            v.start(env.vseqr);
+            #500ns; phase.drop_objection(this);
+        endtask
+    endclass
+
 endpackage : clkmgr_test_pkg
 `endif

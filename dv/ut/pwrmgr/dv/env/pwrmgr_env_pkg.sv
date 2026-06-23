@@ -71,10 +71,10 @@ package pwrmgr_env_pkg;
             sw_iso_en.configure(iso_cfg_r, 1, 0, "RW", 0, ISO_CFG_RST[0], 1, 1, 1);
 
             default_map = create_map("default_map", PWRMGR_BASE, 4, UVM_LITTLE_ENDIAN);
-            default_map.add_reg(ctrl_r,        PWRMGR_CTRL,        "RW");
-            default_map.add_reg(wake_cfg_r,    PWRMGR_WAKE_CFG,    "RW");
-            default_map.add_reg(wake_status_r, PWRMGR_WAKE_STATUS, "RC");
-            default_map.add_reg(iso_cfg_r,     PWRMGR_ISO_CFG,     "RW");
+            default_map.add_reg(ctrl_r,        'h00, "RW");
+            default_map.add_reg(wake_cfg_r,    'h04, "RW");
+            default_map.add_reg(wake_status_r, 'h08, "RC");
+            default_map.add_reg(iso_cfg_r,     'h0C, "RW");
             lock_model();
         endfunction
         function new(string name="pwrmgr_reg_block");

@@ -18,10 +18,18 @@ package clkmgr_env_pkg;
     import crg_base_pkg::*;
     import crg_reg_map_pkg::*;
 
-    // ---- Generic 48-bit RW register (PLL_CFG needs 45 bits for frac+divs) ----
+    // ---- Generic RW register ----
     class clkmgr_reg extends uvm_reg;
         `uvm_object_utils(clkmgr_reg)
-        function new(string name="clkmgr_reg", int unsigned n_bits=48);
+        function new(string name="clkmgr_reg", int unsigned n_bits=32);
+            super.new(name, n_bits, UVM_NO_COVERAGE);
+        endfunction
+    endclass
+
+    // ---- Wide register for PLL_CFG (45 bits: frac 24 + divs) ----
+    class clkmgr_reg_wide extends uvm_reg;
+        `uvm_object_utils(clkmgr_reg_wide)
+        function new(string name="clkmgr_reg_wide", int unsigned n_bits=48);
             super.new(name, n_bits, UVM_NO_COVERAGE);
         endfunction
     endclass
@@ -36,11 +44,12 @@ package clkmgr_env_pkg;
         rand uvm_reg_field gate_cpu, gate_gpu, gate_ddr;
         rand uvm_reg_field mux_cpu, mux_gpu, mux_ddr;
 
-        clkmgr_reg clk_ctrl_r, pll_cfg_r, pll_status_r, div_cfg_r, gate_cfg_r, mux_cfg_r;
+        clkmgr_reg clk_ctrl_r, pll_status_r, div_cfg_r, gate_cfg_r, mux_cfg_r;
+        clkmgr_reg_wide pll_cfg_r;
 
         virtual function void build();
             clk_ctrl_r    = clkmgr_reg::type_id::create("clk_ctrl");    clk_ctrl_r.configure(this);
-            pll_cfg_r     = clkmgr_reg::type_id::create("pll_cfg");     pll_cfg_r.configure(this);
+            pll_cfg_r     = clkmgr_reg_wide::type_id::create("pll_cfg");  pll_cfg_r.configure(this);
             pll_status_r  = clkmgr_reg::type_id::create("pll_status");  pll_status_r.configure(this);
             div_cfg_r     = clkmgr_reg::type_id::create("div_cfg");     div_cfg_r.configure(this);
             gate_cfg_r    = clkmgr_reg::type_id::create("gate_cfg");    gate_cfg_r.configure(this);
@@ -89,12 +98,12 @@ package clkmgr_env_pkg;
             mux_ddr.configure(mux_cfg_r, 2, 4, "RW", 0, MUX_CFG_RST[5:4], 1, 1, 1);
 
             default_map = create_map("default_map", CLKMGR_BASE, 4, UVM_LITTLE_ENDIAN);
-            default_map.add_reg(clk_ctrl_r,   CLKMGR_CLK_CTRL,    "RW");
-            default_map.add_reg(pll_cfg_r,    CLKMGR_PLL_CFG,     "RW");
-            default_map.add_reg(pll_status_r, CLKMGR_PLL_STATUS,  "RO");
-            default_map.add_reg(div_cfg_r,    CLKMGR_DIV_CFG,     "RW");
-            default_map.add_reg(gate_cfg_r,   CLKMGR_GATE_CFG,    "RW");
-            default_map.add_reg(mux_cfg_r,    CLKMGR_MUX_CFG,     "RW");
+            default_map.add_reg(clk_ctrl_r,   'h00, "RW");
+            default_map.add_reg(pll_cfg_r,    'h04, "RW");
+            default_map.add_reg(pll_status_r, 'h08, "RO");
+            default_map.add_reg(div_cfg_r,    'h0C, "RW");
+            default_map.add_reg(gate_cfg_r,   'h10, "RW");
+            default_map.add_reg(mux_cfg_r,    'h14, "RW");
             lock_model();
         endfunction
         function new(string name="clkmgr_reg_block");

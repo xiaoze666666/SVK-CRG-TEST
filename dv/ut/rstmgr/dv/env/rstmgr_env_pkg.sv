@@ -67,10 +67,10 @@ package rstmgr_env_pkg;
             rst_req_sw.configure(rst_req_r, 1, 0, "RW", 0, RST_REQ_RST[0], 1, 1, 1);
 
             default_map = create_map("default_map", RSTMGR_BASE, 4, UVM_LITTLE_ENDIAN);
-            default_map.add_reg(rst_ctrl_r,      RSTMGR_RST_CTRL,      "RW");
-            default_map.add_reg(rst_glitch_th_r, RSTMGR_RST_GLITCH_TH, "RW");
-            default_map.add_reg(rst_reason_r_,   RSTMGR_RST_REASON,    "RO");
-            default_map.add_reg(rst_req_r,       RSTMGR_RST_REQ,       "RW");
+            default_map.add_reg(rst_ctrl_r,      'h00, "RW");
+            default_map.add_reg(rst_glitch_th_r, 'h04, "RW");
+            default_map.add_reg(rst_reason_r_,   'h08, "RO");
+            default_map.add_reg(rst_req_r,       'h0C, "RW");
             lock_model();
         endfunction
         function new(string name="rstmgr_reg_block");

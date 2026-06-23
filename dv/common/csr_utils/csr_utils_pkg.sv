@@ -31,12 +31,13 @@ package csr_utils_pkg;
     // ---- csr_hw_reset_seq ----
     class csr_hw_reset_seq extends uvm_sequence;
         `uvm_object_utils(csr_hw_reset_seq)
-        `uvm_declare_p_sequencer(uvm_sequencer)
         uvm_reg_block rm;
         function new(string name="csr_hw_reset_seq"); super.new(name); endfunction
         task body();
             uvm_reg regs[$];
             uvm_status_e status;
+            // Reset the reg model to spec defaults so mirrored value == reset value.
+            rm.reset("HARD");
             rm.get_registers(regs);
             foreach (regs[i]) begin
                 regs[i].mirror(status, UVM_CHECK, UVM_FRONTDOOR, null, this);
@@ -47,7 +48,6 @@ package csr_utils_pkg;
     // ---- csr_bit_bash_seq ----
     class csr_bit_bash_seq extends uvm_sequence;
         `uvm_object_utils(csr_bit_bash_seq)
-        `uvm_declare_p_sequencer(uvm_sequencer)
         uvm_reg_block rm;
         function new(string name="csr_bit_bash_seq"); super.new(name); endfunction
         task body();
@@ -75,7 +75,6 @@ package csr_utils_pkg;
     // ---- csr_aliasing_seq ----
     class csr_aliasing_seq extends uvm_sequence;
         `uvm_object_utils(csr_aliasing_seq)
-        `uvm_declare_p_sequencer(uvm_sequencer)
         uvm_reg_block rm;
         function new(string name="csr_aliasing_seq"); super.new(name); endfunction
         task body();
