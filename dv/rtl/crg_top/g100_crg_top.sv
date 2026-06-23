@@ -1,15 +1,7 @@
 /***********************************************************
- * g100_crg_top - SoC-level CRG top (integrates clkmgr/rstmgr/pwrmgr)
+ * g100_crg_top - SoC-level CRG top (3-PLL clock tree)
  *
- * This is the unit under test in the ST environment. The three IPs are
- * wired together here:
- *   - pwrmgr.main_clk_en_o  -> clkmgr.pwr_main_clk_en
- *   - clkmgr.pwr_main_clk_status -> pwrmgr.main_clk_status_i
- *   - pwrmgr.rst_req_o       -> rstmgr (combined into tree via sw_rst)
- *   - clkmgr.{cpu,gpu,ddr}_clk -> rstmgr domain clocks
- *   - rstmgr.{cpu,gpu,ddr}_rst_n -> SoC
- *
- * APB decode: top 12 bits of paddr select IP.
+ * Integrates clkmgr (3 PLL + 10 leaves) + rstmgr + pwrmgr.
  ************************************************************/
 `ifndef G100_CRG_TOP__SV
 `define G100_CRG_TOP__SV
@@ -23,7 +15,6 @@ module g100_crg_top (
     input  logic        apb_clk,
     input  logic        por_rst_n,
 
-    // APB (shared)
     input  logic        psel,
     input  logic        penable,
     input  logic        pwrite,
@@ -33,38 +24,35 @@ module g100_crg_top (
     output logic        pready,
     output logic        pslverr,
 
-    // External clocks
     input  logic        osc_clk,
-    input  logic        xtal_clk,
+    input  logic        gmac_rx_clk_i,
 
-    // External async resets
     input  logic        wdg_rst_n,
     input  logic        dbg_rst_n,
     input  logic        sw_rst_n,
-
-    // External wake sources
     input  logic [3:0]  wake_src_i,
 
-    // Clock outputs
-    output logic        pll_clk,
-    output logic        cpu_clk, gpu_clk, ddr_clk,
-    output logic        cpu_clk_g, gpu_clk_g, ddr_clk_g,
-    output logic        pll_lock,
+    // 3 PLL locks
+    output logic        pll_cpu_lock,
+    output logic        pll_soc_lock,
+    output logic        pll_peri_lock,
 
-    // Reset outputs
+    // 10 leaf clocks
+    output logic        cpu_core_clk, cpu_aclk, axi_main_clk, ddr_ref_clk,
+                        ahb_clk, apb_leaf_clk, periph_clk, gmac_tx_clk, gmac_rx_clk, qspi_ref_clk,
+
+    // resets
     output logic        cpu_rst_n, gpu_rst_n, ddr_rst_n,
     output logic [31:0] rst_reason,
 
-    // Power outputs
+    // power
     output logic        iso_en,
     output logic        pwr_state
 );
 
     import crg_reg_map_pkg::*;
 
-    // ---- APB reset (sync por) ----
     logic apb_rst_n;
-    // simple 2FF sync inline
     logic [1:0] por_sync_q;
     always_ff @(posedge apb_clk or negedge por_rst_n) begin
         if (!por_rst_n) por_sync_q <= 2'b00;
@@ -72,62 +60,50 @@ module g100_crg_top (
     end
     assign apb_rst_n = por_sync_q[1];
 
-    // ---- APB decode (per IP) ----
-    logic        sel_clkmgr, sel_rstmgr, sel_pwrmgr;
-    logic        psel_k, psel_r, psel_p;
+    logic sel_clkmgr, sel_rstmgr, sel_pwrmgr;
+    logic psel_k, psel_r, psel_p;
     logic [31:0] prdata_k, prdata_r, prdata_p;
-    logic        pready_k, pready_r, pready_p;
-    logic        pslverr_k, pslverr_r, pslverr_p;
+    logic pready_k, pready_r, pready_p;
+    logic pslverr_k, pslverr_r, pslverr_p;
 
     assign sel_clkmgr = (paddr[31:12] == CLKMGR_BASE[31:12]);
     assign sel_rstmgr = (paddr[31:12] == RSTMGR_BASE[31:12]);
     assign sel_pwrmgr = (paddr[31:12] == PWRMGR_BASE[31:12]);
-
     assign psel_k = psel & sel_clkmgr;
     assign psel_r = psel & sel_rstmgr;
     assign psel_p = psel & sel_pwrmgr;
 
     always_comb begin
-        prdata  = 32'h0;
-        pready  = 1'b1;
-        pslverr = 1'b0;
-        if (sel_clkmgr) begin
-            prdata = prdata_k; pready = pready_k; pslverr = pslverr_k;
-        end else if (sel_rstmgr) begin
-            prdata = prdata_r; pready = pready_r; pslverr = pslverr_r;
-        end else if (sel_pwrmgr) begin
-            prdata = prdata_p; pready = pready_p; pslverr = pslverr_p;
-        end
+        prdata=32'h0; pready=1'b1; pslverr=1'b0;
+        if (sel_clkmgr) begin prdata=prdata_k; pready=pready_k; pslverr=pslverr_k; end
+        else if (sel_rstmgr) begin prdata=prdata_r; pready=pready_r; pslverr=pslverr_r; end
+        else if (sel_pwrmgr) begin prdata=prdata_p; pready=pready_p; pslverr=pslverr_p; end
     end
 
-    // ---- Handshake wires between IPs ----
     logic main_clk_en_w, main_clk_status_w;
     logic rst_req_w, rst_status_w;
-
-    // rst_req from pwrmgr forces sw_rst path to rstmgr (active low)
     logic combined_sw_rst_n;
     assign combined_sw_rst_n = sw_rst_n & ~rst_req_w;
-    assign rst_status_w      = ~(cpu_rst_n & gpu_rst_n & ddr_rst_n); // 1 if any in reset
+    assign rst_status_w = ~(cpu_rst_n & gpu_rst_n & ddr_rst_n);
 
-    // ---- clkmgr ----
+    // clkmgr
     clkmgr_top u_clkmgr (
         .apb_clk(apb_clk), .apb_rst_n(apb_rst_n),
         .psel(psel_k), .penable(penable), .pwrite(pwrite),
         .paddr(paddr), .pwdata(pwdata),
         .prdata(prdata_k), .pready(pready_k), .pslverr(pslverr_k),
-        .osc_clk(osc_clk), .xtal_clk(xtal_clk),
-        .osc_period_ns(25.0),
-        .pwr_main_clk_en(main_clk_en_w),
-        .pwr_main_clk_status(main_clk_status_w),
-        .pll_clk(pll_clk),
-        .div_clk(),
-        .cpu_clk(cpu_clk), .gpu_clk(gpu_clk), .ddr_clk(ddr_clk),
-        .cpu_clk_g(cpu_clk_g), .gpu_clk_g(gpu_clk_g), .ddr_clk_g(ddr_clk_g),
-        .pll_lock(pll_lock)
+        .osc_clk(osc_clk), .osc_period_ns(25.0),
+        .gmac_rx_clk_i(gmac_rx_clk_i),
+        .pwr_main_clk_en(main_clk_en_w), .pwr_main_clk_status(main_clk_status_w),
+        .pll_cpu_lock(pll_cpu_lock), .pll_soc_lock(pll_soc_lock), .pll_peri_lock(pll_peri_lock),
+        .cpu_core_clk(cpu_core_clk), .cpu_aclk(cpu_aclk),
+        .axi_main_clk(axi_main_clk), .ddr_ref_clk(ddr_ref_clk),
+        .ahb_clk(ahb_clk), .apb_leaf_clk(apb_leaf_clk),
+        .periph_clk(periph_clk), .gmac_tx_clk(gmac_tx_clk),
+        .gmac_rx_clk(gmac_rx_clk), .qspi_ref_clk(qspi_ref_clk)
     );
-    // (main_clk_status_w is driven by clkmgr; pwrmgr reads it as input)
 
-    // ---- rstmgr ----
+    // rstmgr (uses cpu_core/axi_main/ahb as domain clks; map to cpu/gpu/ddr ports)
     rstmgr_top u_rstmgr (
         .apb_clk(apb_clk), .apb_rst_n(apb_rst_n),
         .psel(psel_r), .penable(penable), .pwrite(pwrite),
@@ -135,12 +111,11 @@ module g100_crg_top (
         .prdata(prdata_r), .pready(pready_r), .pslverr(pslverr_r),
         .por_rst_n(por_rst_n), .wdg_rst_n(wdg_rst_n),
         .dbg_rst_n(dbg_rst_n), .sw_rst_n(combined_sw_rst_n),
-        .cpu_clk(cpu_clk), .gpu_clk(gpu_clk), .ddr_clk(ddr_clk),
+        .cpu_clk(cpu_core_clk), .gpu_clk(axi_main_clk), .ddr_clk(ahb_clk),
         .cpu_rst_n(cpu_rst_n), .gpu_rst_n(gpu_rst_n), .ddr_rst_n(ddr_rst_n),
         .rst_reason_o(rst_reason)
     );
 
-    // ---- pwrmgr ----
     pwrmgr_top u_pwrmgr (
         .apb_clk(apb_clk), .apb_rst_n(apb_rst_n),
         .psel(psel_p), .penable(penable), .pwrite(pwrite),

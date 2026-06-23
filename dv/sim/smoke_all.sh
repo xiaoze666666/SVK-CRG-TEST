@@ -7,6 +7,6 @@ for entry in "simv_ut_clkmgr clkmgr_smoke_test" \
     sim=$(echo $entry | awk '{print $1}')
     t=$(echo $entry | awk '{print $2}')
     echo "=== $sim  $t ==="
-    ./$sim +UVM_TESTNAME=$t +ntb_random_seed=1 +UVM_NO_RELNOTES 2>&1 \
+    timeout 60 ./$sim +UVM_TESTNAME=$t +ntb_random_seed=1 +UVM_NO_RELNOTES +UVM_VERBOSITY=UVM_LOW 2>&1 \
         | grep -E "UVM_ERROR|UVM_FATAL|finish at" | head -5
 done

@@ -1,13 +1,16 @@
 /***********************************************************
- * clkmgr_pll - Behavioral PLL model
+ * clkmgr_pll - Behavioral PLL with dual CK0/CK1 outputs
  *
- * Implements lock FSM and fractional/int divider math.
+ * One VCO, two post-divided outputs (CK0 and CK1). This mirrors real
+ * SoC PLLs (e.g. PLL_CPU outputs CK0=CPU core freq, CK1=lower fabric freq).
  *
  *   Fvco = Fref * (fbdiv + (dsmen ? frac/2^24 : 0)) / refdiv
- *   Fout = Fvco / (postdiv1 * postdiv2)
+ *   Fck0 = Fvco / postdiv1
+ *   Fck1 = Fvco / postdiv2
+ *
+ * Lock FSM: cfg change -> lock=0, count down refdiv*fbdiv cycles -> lock=1.
  *
  * BUG_002 (planted): frac mode uses 2^23 instead of 2^24 -> freq doubled.
- * Caught by clkmgr_frequency_vseq via scoreboard period check.
  ************************************************************/
 `ifndef CLKMGR_PLL__SV
 `define CLKMGR_PLL__SV
@@ -20,36 +23,39 @@ module clkmgr_pll (
     input  logic [7:0]  fbdiv,
     input  logic        dsmen,
     input  logic [23:0] frac,
-    input  logic [2:0]  postdiv1,
-    input  logic [2:0]  postdiv2,
-    output logic        clk_out,
+    input  logic [2:0]  postdiv1,    // for CK0
+    input  logic [2:0]  postdiv2,    // for CK1
+    output logic        ck0,
+    output logic        ck1,
     output logic        lock
 );
 
     real fbdiv_eff;
     always_comb begin
         if (dsmen)
-            // BUG_002: spec is 2^24, RTL uses 2^23 -> freq doubled
-            fbdiv_eff = real'(fbdiv) + real'(frac) / 2.0**23;
+            fbdiv_eff = real'(fbdiv) + real'(frac) / 2.0**23;   // BUG_002: should be 2^24
         else
             fbdiv_eff = real'(fbdiv);
     end
 
-    real postdiv_total;
+    real pd1_eff, pd2_eff;
     always_comb begin
-        postdiv_total = real'(postdiv1) * real'(postdiv2);
-        if (postdiv_total == 0) postdiv_total = 1.0;
+        pd1_eff = (postdiv1 == 0) ? 1.0 : real'(postdiv1);
+        pd2_eff = (postdiv2 == 0) ? 1.0 : real'(postdiv2);
     end
 
-    real out_period;
+    real vco_period, ck0_period, ck1_period;
     always_comb begin
-        if (fbdiv_eff > 0 && postdiv_total > 0)
-            out_period = ref_period_ns * real'(refdiv) / fbdiv_eff * postdiv_total;
-        else
-            out_period = 0.0;
+        if (fbdiv_eff > 0) begin
+            vco_period  = ref_period_ns * real'(refdiv) / fbdiv_eff;
+            ck0_period  = vco_period * pd1_eff;
+            ck1_period  = vco_period * pd2_eff;
+        end else begin
+            vco_period = 0; ck0_period = 0; ck1_period = 0;
+        end
     end
 
-    // Lock FSM
+    // ---- Lock FSM ----
     int lock_counter;
     logic [5:0]  refdiv_d;
     logic [7:0]  fbdiv_d;
@@ -82,28 +88,49 @@ module clkmgr_pll (
         end
     end
 
-    real half_period;
-    bit  clk_i;
-    always_comb half_period = (out_period > 0) ? out_period / 2.0 : 0.0;
+    // ---- CK0 / CK1 generation ----
+    real ck0_half, ck1_half;
+    always_comb begin
+        ck0_half = (ck0_period > 0) ? ck0_period / 2.0 : 0.0;
+        ck1_half = (ck1_period > 0) ? ck1_period / 2.0 : 0.0;
+    end
 
+    logic ck0_i, ck1_i;
+
+    // CK0: bypass=ref_clk, else gated by lock
     initial begin
-        clk_i = 1'b0;
+        ck0_i = 1'b0;
         forever begin
             if (bypass) begin
-                @(posedge ref_clk);
-                clk_i = 1'b1;
-                @(negedge ref_clk);
-                clk_i = 1'b0;
-            end else if (lock && half_period > 0) begin
-                clk_i = 1'b1; #(half_period);
-                clk_i = 1'b0; #(half_period);
+                @(posedge ref_clk); ck0_i = 1'b1;
+                @(negedge ref_clk); ck0_i = 1'b0;
+            end else if (lock && ck0_half > 0) begin
+                ck0_i = 1'b1; #(ck0_half);
+                ck0_i = 1'b0; #(ck0_half);
             end else begin
                 @(posedge ref_clk);
             end
         end
     end
 
-    assign clk_out = clk_i;
+    // CK1: independent oscillator at ck1_period
+    initial begin
+        ck1_i = 1'b0;
+        forever begin
+            if (bypass) begin
+                @(posedge ref_clk); ck1_i = 1'b1;
+                @(negedge ref_clk); ck1_i = 1'b0;
+            end else if (lock && ck1_half > 0) begin
+                ck1_i = 1'b1; #(ck1_half);
+                ck1_i = 1'b0; #(ck1_half);
+            end else begin
+                @(posedge ref_clk);
+            end
+        end
+    end
+
+    assign ck0 = ck0_i;
+    assign ck1 = ck1_i;
 
 endmodule
 `endif
