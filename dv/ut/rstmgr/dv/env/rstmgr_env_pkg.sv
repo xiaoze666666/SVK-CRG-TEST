@@ -30,9 +30,9 @@ package rstmgr_env_pkg;
 
     class rstmgr_reg_block extends uvm_reg_block;
         `uvm_object_utils(rstmgr_reg_block)
-        rand uvm_reg_field cpu_rst_n, gpu_rst_n, ddr_rst_n;
+        rand uvm_reg_field domain_en;   // 8 bits, one per domain
         rand uvm_reg_field glitch_th;
-        uvm_reg_field rst_reason_p, rst_reason_w, rst_reason_d, rst_reason_s, rst_reason_r;
+        uvm_reg_field rst_reason_p, rst_reason_w, rst_reason_d, rst_reason_s, rst_reason_lv, rst_reason_sec, rst_reason_req;
         rand uvm_reg_field rst_req_sw;
         rstmgr_reg rst_ctrl_r, rst_glitch_th_r, rst_reason_r_, rst_req_r;
 
@@ -42,26 +42,26 @@ package rstmgr_env_pkg;
             rst_reason_r_   = rstmgr_reg::type_id::create("rst_reason");   rst_reason_r_.configure(this);
             rst_req_r       = rstmgr_reg::type_id::create("rst_req");      rst_req_r.configure(this);
 
-            cpu_rst_n = uvm_reg_field::type_id::create("cpu_rst_n");
-            gpu_rst_n = uvm_reg_field::type_id::create("gpu_rst_n");
-            ddr_rst_n = uvm_reg_field::type_id::create("ddr_rst_n");
-            cpu_rst_n.configure(rst_ctrl_r, 1, 0, "RW", 0, RST_CTRL_RST[0], 1, 1, 1);
-            gpu_rst_n.configure(rst_ctrl_r, 1, 1, "RW", 0, RST_CTRL_RST[1], 1, 1, 1);
-            ddr_rst_n.configure(rst_ctrl_r, 1, 2, "RW", 0, RST_CTRL_RST[2], 1, 1, 1);
+            domain_en = uvm_reg_field::type_id::create("domain_en");
+            domain_en.configure(rst_ctrl_r, 8, 0, "RW", 0, RST_CTRL_RST[7:0], 1, 1, 1);
 
             glitch_th = uvm_reg_field::type_id::create("glitch_th");
             glitch_th.configure(rst_glitch_th_r, 8, 0, "RW", 0, RST_GLITCH_TH_RST[7:0], 1, 1, 1);
 
-            rst_reason_p = uvm_reg_field::type_id::create("rst_reason_p");
-            rst_reason_w = uvm_reg_field::type_id::create("rst_reason_w");
-            rst_reason_d = uvm_reg_field::type_id::create("rst_reason_d");
-            rst_reason_s = uvm_reg_field::type_id::create("rst_reason_s");
-            rst_reason_r = uvm_reg_field::type_id::create("rst_reason_r");
-            rst_reason_p.configure(rst_reason_r_, 1, 0, "RO", 1, RST_REASON_RST[0], 1, 0, 1);
-            rst_reason_w.configure(rst_reason_r_, 1, 1, "RO", 1, RST_REASON_RST[1], 1, 0, 1);
-            rst_reason_d.configure(rst_reason_r_, 1, 2, "RO", 1, RST_REASON_RST[2], 1, 0, 1);
-            rst_reason_s.configure(rst_reason_r_, 1, 3, "RO", 1, RST_REASON_RST[3], 1, 0, 1);
-            rst_reason_r.configure(rst_reason_r_, 1, 4, "RO", 1, RST_REASON_RST[4], 1, 0, 1);
+            rst_reason_p   = uvm_reg_field::type_id::create("rst_reason_p");
+            rst_reason_w   = uvm_reg_field::type_id::create("rst_reason_w");
+            rst_reason_d   = uvm_reg_field::type_id::create("rst_reason_d");
+            rst_reason_s   = uvm_reg_field::type_id::create("rst_reason_s");
+            rst_reason_lv  = uvm_reg_field::type_id::create("rst_reason_lv");
+            rst_reason_sec = uvm_reg_field::type_id::create("rst_reason_sec");
+            rst_reason_req = uvm_reg_field::type_id::create("rst_reason_req");
+            rst_reason_p  .configure(rst_reason_r_, 1, 0, "RO", 1, RST_REASON_RST[0], 1, 0, 1);
+            rst_reason_w  .configure(rst_reason_r_, 1, 1, "RO", 1, RST_REASON_RST[1], 1, 0, 1);
+            rst_reason_d  .configure(rst_reason_r_, 1, 2, "RO", 1, RST_REASON_RST[2], 1, 0, 1);
+            rst_reason_s  .configure(rst_reason_r_, 1, 3, "RO", 1, RST_REASON_RST[3], 1, 0, 1);
+            rst_reason_lv .configure(rst_reason_r_, 1, 4, "RO", 1, RST_REASON_RST[4], 1, 0, 1);
+            rst_reason_sec.configure(rst_reason_r_, 1, 5, "RO", 1, RST_REASON_RST[5], 1, 0, 1);
+            rst_reason_req.configure(rst_reason_r_, 1, 6, "RO", 1, RST_REASON_RST[6], 1, 0, 1);
 
             rst_req_sw = uvm_reg_field::type_id::create("rst_req_sw");
             rst_req_sw.configure(rst_req_r, 1, 0, "RW", 0, RST_REQ_RST[0], 1, 1, 1);
@@ -90,10 +90,14 @@ package rstmgr_env_pkg;
         `uvm_component_utils(rstmgr_env_cov)
         rstmgr_reg_block rm;
         covergroup cg_rst;
-            cp_cpu: coverpoint rm.cpu_rst_n.get();
-            cp_gpu: coverpoint rm.gpu_rst_n.get();
-            cp_ddr: coverpoint rm.ddr_rst_n.get();
-            cx_all: cross cp_cpu, cp_gpu, cp_ddr;
+            cp_d0: coverpoint rm.domain_en.get()[0];
+            cp_d1: coverpoint rm.domain_en.get()[1];
+            cp_d2: coverpoint rm.domain_en.get()[2];
+            cp_d3: coverpoint rm.domain_en.get()[3];
+            cp_d4: coverpoint rm.domain_en.get()[4];
+            cp_d5: coverpoint rm.domain_en.get()[5];
+            cp_d6: coverpoint rm.domain_en.get()[6];
+            cp_d7: coverpoint rm.domain_en.get()[7];
         endgroup
         covergroup cg_glitch;
             cp_th: coverpoint rm.glitch_th.get() { bins t[] = {[1:10]}; }

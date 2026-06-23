@@ -45,9 +45,9 @@
             rr(env.rm.rst_reason_r_, d);
             `uvm_info("VSEQ", $sformatf("rst_reason=%08h", d), UVM_LOW)
             // toggle sw-rst bit
-            rw(env.rm.rst_ctrl_r, 32'h0); // all in reset
+            rw(env.rm.rst_ctrl_r, 32'h00); // all 8 domains in reset
             #500ns;
-            rw(env.rm.rst_ctrl_r, 32'h7); // all out
+            rw(env.rm.rst_ctrl_r, 32'hFF); // all 8 out
             #500ns;
         endtask
     endclass
@@ -69,8 +69,8 @@
         task body();
             // toggle reset enables — async assert / sync release checked in SVA
             for (int i = 0; i < 4; i++) begin
-                rw(env.rm.rst_ctrl_r, 32'h0); #300ns;
-                rw(env.rm.rst_ctrl_r, 32'h7); #500ns;
+                rw(env.rm.rst_ctrl_r, 32'h00); #300ns;
+                rw(env.rm.rst_ctrl_r, 32'hFF); #500ns;
             end
         endtask
     endclass
@@ -93,7 +93,7 @@
         function new(string name="rstmgr_stress_vseq"); super.new(name); endfunction
         task body();
             for (int i = 0; i < 20; i++) begin
-                rw(env.rm.rst_ctrl_r, $urandom_range(0,7));
+                rw(env.rm.rst_ctrl_r, $urandom_range(0,8'hFF));
                 rw(env.rm.rst_glitch_th_r, $urandom_range(0,15));
                 #($urandom_range(100, 400));
             end

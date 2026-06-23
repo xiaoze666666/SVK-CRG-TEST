@@ -19,7 +19,7 @@ module tb;
     logic por_rst_n;
     logic osc_clk;
     logic gmac_rx_clk_i;
-    logic wdg_rst_n, dbg_rst_n, sw_rst_n;
+    logic wdg_rst_n, dbg_rst_n, sw_rst_n, low_volt_n, sec_rst_n;
     logic [3:0] wake_src;
 
     clk_rst_if apb_clk_if();
@@ -39,7 +39,7 @@ module tb;
     logic pll_cpu_lock, pll_soc_lock, pll_peri_lock;
     logic cpu_core_clk, cpu_aclk, axi_main_clk, ddr_ref_clk;
     logic ahb_clk, apb_leaf_clk, periph_clk, gmac_tx_clk, gmac_rx_clk, qspi_ref_clk;
-    logic cpu_rst_n, gpu_rst_n, ddr_rst_n;
+    logic [7:0] domain_rst_n;
     logic [31:0] rst_reason;
     logic iso_en, pwr_state;
 
@@ -50,6 +50,7 @@ module tb;
         .prdata(apb_vif.prdata), .pready(apb_vif.pready), .pslverr(apb_vif.pslverr),
         .osc_clk(osc_clk), .gmac_rx_clk_i(gmac_rx_clk_i),
         .wdg_rst_n(wdg_rst_n), .dbg_rst_n(dbg_rst_n), .sw_rst_n(sw_rst_n),
+        .low_volt_n(low_volt_n), .sec_rst_n(sec_rst_n),
         .wake_src_i(wake_src),
         .pll_cpu_lock(pll_cpu_lock), .pll_soc_lock(pll_soc_lock), .pll_peri_lock(pll_peri_lock),
         .cpu_core_clk(cpu_core_clk), .cpu_aclk(cpu_aclk),
@@ -57,7 +58,7 @@ module tb;
         .ahb_clk(ahb_clk), .apb_leaf_clk(apb_leaf_clk),
         .periph_clk(periph_clk), .gmac_tx_clk(gmac_tx_clk),
         .gmac_rx_clk(gmac_rx_clk), .qspi_ref_clk(qspi_ref_clk),
-        .cpu_rst_n(cpu_rst_n), .gpu_rst_n(gpu_rst_n), .ddr_rst_n(ddr_rst_n),
+        .domain_rst_n(domain_rst_n),
         .rst_reason(rst_reason),
         .iso_en(iso_en), .pwr_state(pwr_state)
     );
@@ -76,6 +77,7 @@ module tb;
     initial begin
         apb_clk_if.set_active(); osc_if.set_active();
         por_rst_n = 0; wdg_rst_n = 1; dbg_rst_n = 1; sw_rst_n = 1;
+        low_volt_n = 1; sec_rst_n = 1;
         apb_clk_if.rst_n = 0;
         apb_vif.psel = 0; apb_vif.penable = 0; apb_vif.pwrite = 0;
         apb_vif.paddr = 0; apb_vif.pwdata = 0;

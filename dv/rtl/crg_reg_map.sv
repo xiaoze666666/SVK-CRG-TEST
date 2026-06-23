@@ -67,8 +67,8 @@ package crg_reg_map_pkg;
     localparam logic [31:0] DIV_CFG_RST         = 32'h0000_0000;
     localparam logic [31:0] GATE_CFG_RST        = 32'h0000_03FF;  // 10 leaves gated ON
 
-    // rstmgr / pwrmgr (unchanged)
-    localparam logic [31:0] RST_CTRL_RST      = 32'h0000_0007;
+    // rstmgr / pwrmgr (updated for 8-domain reset tree)
+    localparam logic [31:0] RST_CTRL_RST      = 32'h0000_00FF;   // all 8 domains out of reset
     localparam logic [31:0] RST_GLITCH_TH_RST = 32'h0000_0004;
     localparam logic [31:0] RST_REASON_RST    = 32'h0000_0000;
     localparam logic [31:0] RST_REQ_RST       = 32'h0000_0000;

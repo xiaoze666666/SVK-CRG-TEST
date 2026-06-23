@@ -30,6 +30,8 @@ module g100_crg_top (
     input  logic        wdg_rst_n,
     input  logic        dbg_rst_n,
     input  logic        sw_rst_n,
+    input  logic        low_volt_n,
+    input  logic        sec_rst_n,
     input  logic [3:0]  wake_src_i,
 
     // 3 PLL locks
@@ -41,8 +43,8 @@ module g100_crg_top (
     output logic        cpu_core_clk, cpu_aclk, axi_main_clk, ddr_ref_clk,
                         ahb_clk, apb_leaf_clk, periph_clk, gmac_tx_clk, gmac_rx_clk, qspi_ref_clk,
 
-    // resets
-    output logic        cpu_rst_n, gpu_rst_n, ddr_rst_n,
+    // resets: 8 domain resets + reason
+    output logic [7:0]  domain_rst_n,
     output logic [31:0] rst_reason,
 
     // power
@@ -84,7 +86,7 @@ module g100_crg_top (
     logic rst_req_w, rst_status_w;
     logic combined_sw_rst_n;
     assign combined_sw_rst_n = sw_rst_n & ~rst_req_w;
-    assign rst_status_w = ~(cpu_rst_n & gpu_rst_n & ddr_rst_n);
+    assign rst_status_w = ~(domain_rst_n[0] & domain_rst_n[1] & domain_rst_n[7]);
 
     // clkmgr
     clkmgr_top u_clkmgr (
@@ -103,7 +105,7 @@ module g100_crg_top (
         .gmac_rx_clk(gmac_rx_clk), .qspi_ref_clk(qspi_ref_clk)
     );
 
-    // rstmgr (uses cpu_core/axi_main/ahb as domain clks; map to cpu/gpu/ddr ports)
+    // rstmgr (8-domain reset tree, fed by 8 leaf clocks)
     rstmgr_top u_rstmgr (
         .apb_clk(apb_clk), .apb_rst_n(apb_rst_n),
         .psel(psel_r), .penable(penable), .pwrite(pwrite),
@@ -111,8 +113,12 @@ module g100_crg_top (
         .prdata(prdata_r), .pready(pready_r), .pslverr(pslverr_r),
         .por_rst_n(por_rst_n), .wdg_rst_n(wdg_rst_n),
         .dbg_rst_n(dbg_rst_n), .sw_rst_n(combined_sw_rst_n),
-        .cpu_clk(cpu_core_clk), .gpu_clk(axi_main_clk), .ddr_clk(ahb_clk),
-        .cpu_rst_n(cpu_rst_n), .gpu_rst_n(gpu_rst_n), .ddr_rst_n(ddr_rst_n),
+        .low_volt_n(low_volt_n), .sec_rst_n(sec_rst_n),
+        .cpu_core_clk(cpu_core_clk), .cpu_aclk(cpu_aclk),
+        .axi_main_clk(axi_main_clk), .ddr_ref_clk(ddr_ref_clk),
+        .ahb_clk(ahb_clk), .periph_clk(periph_clk),
+        .gmac_clk(gmac_tx_clk), .qspi_clk(qspi_ref_clk),
+        .domain_rst_n(domain_rst_n),
         .rst_reason_o(rst_reason)
     );
 
