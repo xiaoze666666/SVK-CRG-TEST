@@ -1,0 +1,16 @@
+=== simv_ut_clkmgr  clkmgr_smoke_test ===
+UVM_ERROR :    0
+UVM_FATAL :    0
+$finish at simulation time              6993750
+=== simv_ut_rstmgr  rstmgr_smoke_test ===
+UVM_ERROR :    0
+UVM_FATAL :    0
+$finish at simulation time              2585000
+=== simv_ut_pwrmgr  pwrmgr_smoke_test ===
+UVM_ERROR :    0
+UVM_FATAL :    0
+$finish at simulation time              2025000
+=== simv_st  crg_top_smoke_test ===
+UVM_ERROR :    0
+UVM_FATAL :    0
+$finish at simulation time             13756250

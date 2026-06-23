@@ -1,0 +1,25 @@
+# Simulation outputs
+dv/sim/work/
+*.log
+csrc/
+simv*
+ucli.key
+DVEfiles/
+verdiLog/
+*.fsdb
+*.vcd
+*.vpd
+*.cm
+*.cm.*
+cm.log
+
+# Editor / OS
+*~
+.*.swp
+.DS_Store
+Thumbs.db
+
+# Temporary debug artifacts
+_*.ps1
+_*.txt
+_*.xml
